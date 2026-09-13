@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Killactivity - System Task Control</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        mono: {
+                            950: '#000000',
+                            900: '#0A0A0A',
+                            850: '#121212',
+                            800: '#1A1A1A',
+                            700: '#2A2A2A',
+                            600: '#3F3F3F',
+                            500: '#666666',
+                            400: '#888888',
+                            300: '#AAAAAA',
+                            200: '#CCCCCC',
+                            100: '#E5E5E5',
+                            50: '#FFFFFF'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #FFFFFF;
+            min-height: 100vh;
+        }
+
+        .mono-panel {
+            background: #0A0A0A;
+            border: 1px solid #222222;
+        }
+
+        .mono-card {
+            background: #121212;
+            border: 1px solid #2A2A2A;
+            transition: all 0.2s ease;
+        }
+
+        .mono-card:hover {
+            border-color: #FFFFFF;
+            background: #1A1A1A;
+        }
+
+        .mono-button {
+            background: #FFFFFF;
+            color: #000000;
+            transition: all 0.15s ease;
+        }
+
+        .mono-button:hover {
+            background: #CCCCCC;
+        }
+
+        .mono-button-outline {
+            background: #000000;
+            color: #FFFFFF;
+            border: 1px solid #333333;
+            transition: all 0.15s ease;
+        }
+
+        .mono-button-outline:hover {
+            border-color: #FFFFFF;
+            background: #121212;
+        }
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0A0A0A;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #2A2A2A;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555555;
+        }
+
+        .scanlines {
+            position: relative;
+            overflow: hidden;
+        }
+        .scanlines::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 18, 18, 0) 50%, rgba(0, 0, 0, 0.5) 50%);
+            background-size: 100% 4px;
+            z-index: 2;
+            pointer-events: none;
+            opacity: 0.3;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen text-white antialiased selection:bg-white selection:text-black pb-10">
+
+    <header class="w-full border-b border-mono-800 bg-mono-950 sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <!-- Custom Monochrome SVG Logo for Killactivity -->
+                <div class="w-10 h-10 rounded-xl bg-black border border-white/20 flex items-center justify-center p-2">
+                    <svg class="w-full h-full text-white" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M50 8L85 28V72L50 92L15 72V28L50 8Z" stroke="currentColor" stroke-width="6" stroke-linejoin="round" class="opacity-40" />
+                        <path d="M25 50H38L44 32L54 68L62 42L68 50H75" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" />
+                        <circle cx="50" cy="50" r="4" fill="#FFFFFF" />
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                        KILLACTIVITY
+                        <span class="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-white text-black font-bold">V2.6</span>
+                    </h1>
+                    <p class="text-xs text-mono-400 hidden sm:block">System Task Manager and Activity Control</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button id="btn-export-zip" onclick="exportProjectZip()" class="flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl mono-button">
+                    <i class="fa-solid fa-file-zipper text-sm"></i>
+                    <span>Export ZIP</span>
+                </button>
+                <button id="btn-refresh" onclick="refreshSystemState()" title="Refresh System Status" class="p-2 rounded-xl mono-button-outline">
+                    <i class="fa-solid fa-rotate text-sm"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-3xl w-full mx-auto px-4 pt-6 flex-1 flex flex-col gap-5">
+
+        <!-- System Status Banner -->
+        <section class="mono-panel rounded-2xl p-5 relative overflow-hidden">
+            <div class="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                <div id="status-icon-box" class="w-14 h-14 rounded-2xl bg-mono-900 border border-white/30 flex items-center justify-center shrink-0">
+                    <i id="status-icon" class="fa-solid fa-shield-halved text-white text-xl"></i>
+                </div>
+
+                <div class="flex-1 text-center sm:text-left space-y-1">
+                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <h2 id="status-heading" class="text-lg font-bold text-white">Root Access Granted</h2>
+                        <span id="service-status-pill" class="text-xs font-mono px-2 py-0.5 rounded bg-white/10 text-white border border-white/20">
+                            Service Active
+                        </span>
+                    </div>
+                    <p id="device-model" class="text-xs font-medium text-mono-300">Quest 2 — android_x86_64 (Meta Horizon OS)</p>
+
+                    <!-- Memory Usage Indicator -->
+                    <div class="pt-3 max-w-xs mx-auto sm:mx-0">
+                        <div class="bg-mono-900 rounded-xl p-2.5 border border-mono-800">
+                            <div class="flex justify-between items-center text-xs mb-1">
+                                <span class="text-mono-400 flex items-center gap-1.5"><i class="fa-solid fa-memory text-white"></i> RAM Available</span>
+                                <span id="ram-text" class="font-mono text-white font-bold">4.2 GB</span>
+                            </div>
+                            <div class="w-full bg-mono-800 rounded-full h-1.5 overflow-hidden">
+                                <div id="ram-bar" class="bg-white h-1.5 rounded-full transition-all duration-500" style="width: 65%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mono-panel rounded-2xl p-4 space-y-4">
+            <!-- Segmented Control Button Row -->
+            <div class="grid grid-cols-2 p-1 bg-mono-900 rounded-xl border border-mono-800 text-xs font-semibold">
+                <button id="tab-start-boot" onclick="setBootMode('start')" class="py-2 rounded-lg text-black bg-white shadow-sm flex items-center justify-center gap-2 transition-all">
+                    <i class="fa-solid fa-check text-black text-xs"></i>
+                    <span>Start on boot</span>
+                </button>
+                <button id="tab-root-boot" onclick="setBootMode('root')" class="py-2 rounded-lg text-mono-400 hover:text-white flex items-center justify-center gap-2 transition-all">
+                    <span>Root on boot</span>
+                </button>
+            </div>
+
+            <!-- Custom Switches -->
+            <div class="space-y-3 divide-y divide-mono-800">
+                <div class="flex items-center justify-between pt-1">
+                    <div>
+                        <div class="text-sm font-semibold text-white">Start on boot</div>
+                        <div class="text-xs text-mono-400">Launch background service automatically on system startup</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-autostart" checked onchange="handleToggleChange('Start on boot', this.checked)" class="sr-only peer">
+                        <div class="w-11 h-6 bg-mono-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-black after:border-mono-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-white"></div>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between pt-3">
+                    <div>
+                        <div class="text-sm font-semibold text-white">Aggressive Task Termination</div>
+                        <div class="text-xs text-mono-400">Purge telemetry services and background app processes</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-aggressive" checked onchange="handleToggleChange('Aggressive Task Termination', this.checked)" class="sr-only peer">
+                        <div class="w-11 h-6 bg-mono-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-black after:border-mono-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-white"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Requested Main Execution Button -->
+            <button onclick="executeRootKillNow()" class="w-full py-3.5 px-4 rounded-xl mono-button font-bold text-sm flex items-center justify-center gap-2 group">
+                <i class="fa-solid fa-bolt text-black group-hover:scale-110 transition-transform"></i>
+                <span>Kill Root</span>
+            </button>
+        </section>
+
+        <section class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button onclick="openFeatureModal('A/D Tweaks')" class="mono-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2.5 text-center group">
+                <div class="w-10 h-10 rounded-xl bg-mono-900 border border-mono-700 flex items-center justify-center text-white group-hover:border-white transition-colors">
+                    <i class="fa-solid fa-sliders text-base"></i>
+                </div>
+                <span class="text-xs font-semibold text-white">A/D Tweaks</span>
+            </button>
+
+            <button onclick="openFeatureModal('Apps')" class="mono-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2.5 text-center group">
+                <div class="w-10 h-10 rounded-xl bg-mono-900 border border-mono-700 flex items-center justify-center text-white group-hover:border-white transition-colors">
+                    <i class="fa-solid fa-cubes text-base"></i>
+                </div>
+                <span class="text-xs font-semibold text-white">Apps</span>
+            </button>
+
+            <button onclick="openFeatureModal('Controllers')" class="mono-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2.5 text-center group">
+                <div class="w-10 h-10 rounded-xl bg-mono-900 border border-mono-700 flex items-center justify-center text-white group-hover:border-white transition-colors">
+                    <i class="fa-solid fa-gamepad text-base"></i>
+                </div>
+                <span class="text-xs font-semibold text-white">Controllers</span>
+            </button>
+
+            <button onclick="openFeatureModal('Terminal')" class="mono-card p-4 rounded-2xl flex flex-col items-center justify-center gap-2.5 text-center group">
+                <div class="w-10 h-10 rounded-xl bg-mono-900 border border-mono-700 flex items-center justify-center text-white group-hover:border-white transition-colors">
+                    <i class="fa-solid fa-terminal text-base"></i>
+                </div>
+                <span class="text-xs font-semibold text-white">Terminal</span>
+            </button>
+        </section>
+
+        <section class="mono-panel rounded-2xl p-4 flex flex-col gap-2">
+            <div class="flex items-center justify-between px-1">
+                <span class="text-xs font-bold uppercase tracking-wider text-mono-400 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                    Log Output
+                </span>
+                <div class="flex items-center gap-2">
+                    <button onclick="copyLogs()" class="text-[11px] text-mono-300 hover:text-white px-2 py-0.5 rounded bg-mono-900 border border-mono-700">
+                        <i class="fa-regular fa-copy mr-1"></i>Copy
+                    </button>
+                    <button onclick="clearLogs()" class="text-[11px] text-mono-300 hover:text-white px-2 py-0.5 rounded bg-mono-900 border border-mono-700">
+                        <i class="fa-solid fa-eraser mr-1"></i>Clear
+                    </button>
+                </div>
+            </div>
+
+            <div class="scanlines bg-black rounded-xl p-3 border border-mono-800 font-mono text-xs text-mono-200 min-h-[160px] max-h-[220px] overflow-y-auto flex flex-col gap-1.5" id="terminal-log">
+                <!-- Log entries added dynamically -->
+            </div>
+        </section>
+
+    </main>
+
+    <div id="feature-modal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 hidden">
+        <div class="mono-panel rounded-2xl max-w-md w-full p-5 space-y-4 border border-mono-700 shadow-2xl">
+            <div class="flex items-center justify-between border-b border-mono-800 pb-3">
+                <h3 id="modal-title" class="text-base font-bold text-white flex items-center gap-2">
+                    <i id="modal-icon" class="fa-solid fa-sliders text-white"></i>
+                    <span>Feature Module</span>
+                </h3>
+                <button onclick="closeFeatureModal()" class="text-mono-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <div id="modal-body" class="text-xs text-mono-300 space-y-3">
+                <!-- Dynamic content -->
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-mono-800">
+                <button onclick="closeFeatureModal()" class="px-4 py-2 rounded-xl bg-mono-900 border border-mono-700 text-mono-300 text-xs font-semibold hover:text-white">Close</button>
+                <button id="modal-action-btn" class="px-4 py-2 rounded-xl mono-button text-xs font-bold">Execute</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-mono-900 border border-white text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all duration-300 transform translate-y-20 opacity-0 z-50 pointer-events-none">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-white"></i>
+        <span id="toast-message" class="text-xs font-medium">Notification message</span>
+    </div>
+
+    <script>
+        let logStream = [
+            { time: getTimestamp(), type: 'info', msg: 'Killactivity Daemon V2.6 initialized.' },
+            { time: getTimestamp(), type: 'success', msg: 'Root access granted on Quest 2 via su shell.' },
+            { time: getTimestamp(), type: 'info', msg: 'Monitoring system activity processes.' }
+        ];
+
+        let bootMode = 'start';
+
+        window.onload = function() {
+            renderLogs();
+            appendLog('system', 'System status verified: operational.');
+        };
+
+        function getTimestamp() {
+            const d = new Date();
+            return d.toTimeString().split(' ')[0] + '.' + Math.floor(d.getMilliseconds() / 100);
+        }
+
+        function appendLog(type, message) {
+            const entry = { time: getTimestamp(), type: type, msg: message };
+            logStream.push(entry);
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const container = document.getElementById('terminal-log');
+            if (!container) return;
+
+            container.innerHTML = logStream.map(log => {
+                let colorClass = 'text-mono-200';
+                let tagColor = 'text-mono-400';
+
+                if (log.type === 'success' || log.type === 'exec') {
+                    colorClass = 'text-white font-semibold';
+                    tagColor = 'text-mono-200';
+                }
+
+                return `
+                    <div class="leading-relaxed hover:bg-mono-900 px-1 rounded transition-colors">
+                        <span class="text-mono-500 text-[10px] select-none mr-1 font-mono">[${log.time}]</span>
+                        <span class="${tagColor} font-semibold uppercase text-[10px] mr-1">[${log.type}]</span>
+                        <span class="${colorClass}">${escapeHtml(log.msg)}</span>
+                    </div>
+                `;
+            }).join('');
+
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function clearLogs() {
+            logStream = [];
+            appendLog('info', 'Console output cleared.');
+            showToast('Logs cleared');
+        }
+
+        function copyLogs() {
+            const text = logStream.map(l => `[${l.time}] [${l.type.toUpperCase()}] ${l.msg}`).join('\n');
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                showToast('Logs copied to clipboard');
+            } catch (err) {
+                showToast('Copy failed');
+            }
+            document.body.removeChild(textarea);
+        }
+
+        function handleToggleChange(label, state) {
+            const statusText = state ? 'enabled' : 'disabled';
+            appendLog('exec', `Setting '${label}' updated to: ${statusText.toUpperCase()}`);
+            showToast(`${label} ${statusText}`);
+        }
+
+        function setBootMode(mode) {
+            bootMode = mode;
+            const btnStart = document.getElementById('tab-start-boot');
+            const btnRoot = document.getElementById('tab-root-boot');
+
+            if (mode === 'start') {
+                btnStart.className = 'py-2 rounded-lg text-black bg-white shadow-sm flex items-center justify-center gap-2 transition-all';
+                btnStart.innerHTML = '<i class="fa-solid fa-check text-black text-xs"></i><span>Start on boot</span>';
+                
+                btnRoot.className = 'py-2 rounded-lg text-mono-400 hover:text-white flex items-center justify-center gap-2 transition-all';
+                btnRoot.innerHTML = '<span>Root on boot</span>';
+                
+                appendLog('info', 'Boot configuration set: Start on boot');
+            } else {
+                btnRoot.className = 'py-2 rounded-lg text-black bg-white shadow-sm flex items-center justify-center gap-2 transition-all';
+                btnRoot.innerHTML = '<i class="fa-solid fa-check text-black text-xs"></i><span>Root on boot</span>';
+
+                btnStart.className = 'py-2 rounded-lg text-mono-400 hover:text-white flex items-center justify-center gap-2 transition-all';
+                btnStart.innerHTML = '<span>Start on boot</span>';
+
+                appendLog('info', 'Boot configuration set: Root on boot');
+            }
+        }
+
+        function executeRootKillNow() {
+            appendLog('exec', 'SIGKILL signal issued via root prompt...');
+            
+            setTimeout(() => {
+                appendLog('danger', 'Terminated process: com.oculus.telemetry (PID 4021)');
+                appendLog('danger', 'Terminated process: com.oculus.social (PID 5108)');
+                appendLog('danger', 'Terminated process: com.facebook.spatial.service (PID 6692)');
+            }, 300);
+
+            setTimeout(() => {
+                document.getElementById('ram-text').innerText = '5.1 GB';
+                document.getElementById('ram-bar').style.width = '82%';
+                
+                appendLog('success', 'Kill Root executed. Freed 890 MB memory.');
+                showToast('Kill Root complete (+890MB free RAM)');
+            }, 700);
+        }
+
+        function refreshSystemState() {
+            const btn = document.getElementById('btn-refresh');
+            btn.classList.add('animate-spin');
+            
+            appendLog('info', 'Querying Quest 2 system state...');
+            
+            setTimeout(() => {
+                btn.classList.remove('animate-spin');
+                appendLog('success', 'System refresh complete. Service state: active.');
+                showToast('System state updated');
+            }, 600);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+
+            toastMsg.innerText = msg;
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2500);
+        }
+
+        function openFeatureModal(feature) {
+            const modal = document.getElementById('feature-modal');
+            const title = document.getElementById('modal-title');
+            const icon = document.getElementById('modal-icon');
+            const body = document.getElementById('modal-body');
+            const actionBtn = document.getElementById('modal-action-btn');
+
+            modal.classList.remove('hidden');
+
+            if (feature === 'A/D Tweaks') {
+                icon.className = 'fa-solid fa-sliders text-white';
+                title.querySelector('span').innerText = 'A/D Tweaks (Analog & Display)';
+                body.innerHTML = `
+                    <p class="text-mono-400 mb-2">Configure display refresh rate parameters for Quest 2.</p>
+                    <div class="space-y-2 bg-black p-3 rounded-xl border border-mono-800">
+                        <label class="block font-medium text-white">Display Refresh Rate</label>
+                        <select id="tweak-hz" class="w-full bg-mono-900 border border-mono-700 rounded-lg p-2 text-xs text-white">
+                            <option value="90Hz">90 Hz</option>
+                            <option value="120Hz" selected>120 Hz</option>
+                        </select>
+                    </div>
+                `;
+                actionBtn.onclick = () => {
+                    const val = document.getElementById('tweak-hz').value;
+                    appendLog('exec', `Display rate set to ${val}`);
+                    showToast(`Set display rate to ${val}`);
+                    closeFeatureModal();
+                };
+            } else if (feature === 'Apps') {
+                icon.className = 'fa-solid fa-cubes text-white';
+                title.querySelector('span').innerText = 'App Manager';
+                body.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between p-2 rounded-lg bg-black border border-mono-800">
+                            <div>
+                                <div class="font-semibold text-white">com.meta.analytics</div>
+                                <div class="text-[10px] text-mono-400">Background Telemetry</div>
+                            </div>
+                            <span class="px-2 py-1 rounded bg-white text-black text-[10px] font-bold">DISABLED</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded-lg bg-black border border-mono-800">
+                            <div>
+                                <div class="font-semibold text-white">com.killactivity.daemon</div>
+                                <div class="text-[10px] text-mono-400">Main Control Service</div>
+                            </div>
+                            <span class="px-2 py-1 rounded bg-white text-black text-[10px] font-bold">ACTIVE</span>
+                        </div>
+                    </div>
+                `;
+                actionBtn.onclick = () => {
+                    appendLog('info', 'Package status scanned.');
+                    showToast('Packages updated');
+                    closeFeatureModal();
+                };
+            } else if (feature === 'Controllers') {
+                icon.className = 'fa-solid fa-gamepad text-white';
+                title.querySelector('span').innerText = 'Controllers & Haptics';
+                body.innerHTML = `
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center bg-black p-3 rounded-xl border border-mono-800">
+                            <span>Left Quest 2 Controller</span>
+                            <span class="text-white font-mono text-xs font-bold">Connected</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-black p-3 rounded-xl border border-mono-800">
+                            <span>Right Quest 2 Controller</span>
+                            <span class="text-white font-mono text-xs font-bold">Connected</span>
+                        </div>
+                    </div>
+                `;
+                actionBtn.onclick = () => {
+                    appendLog('exec', 'Triggered haptic vibration test.');
+                    showToast('Haptic test executed');
+                    closeFeatureModal();
+                };
+            } else if (feature === 'Terminal') {
+                icon.className = 'fa-solid fa-terminal text-white';
+                title.querySelector('span').innerText = 'Root Terminal';
+                body.innerHTML = `
+                    <div class="space-y-2">
+                        <label class="block text-mono-400">Run Command (su):</label>
+                        <input id="custom-cmd" type="text" placeholder="pm disable-user com.oculus.vrshell" class="w-full bg-black border border-mono-700 rounded-lg p-2.5 font-mono text-xs text-white focus:outline-none focus:border-white">
+                    </div>
+                `;
+                actionBtn.onclick = () => {
+                    const input = document.getElementById('custom-cmd').value || 'uname -a';
+                    appendLog('exec', `# ${input}`);
+                    appendLog('success', 'Command executed (exit code 0)');
+                    showToast('Command executed');
+                    closeFeatureModal();
+                };
+            }
+        }
+
+        function closeFeatureModal() {
+            document.getElementById('feature-modal').classList.add('hidden');
+        }
+
+        function exportProjectZip() {
+            appendLog('info', 'Generating ZIP package...');
+            showToast('Preparing project ZIP download...');
+
+            const zip = new JSZip();
+
+            const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Killactivity Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-black text-white">
+    <header class="p-4 border-b border-zinc-800 flex items-center justify-between">
+        <h1 class="text-lg font-bold text-white">KILLACTIVITY V2.6</h1>
+    </header>
+    <main class="p-4">
+        <div id="terminal-log" class="bg-zinc-900 p-4 rounded border border-zinc-800 font-mono text-xs">
+            [SYSTEM] Killactivity Service running on Quest 2...
+        </div>
+    </main>
+    <script src="app.js"><\/script>
+</body>
+</html>`;
+
+            const cssContent = `body { background-color: #000000; color: #FFFFFF; font-family: system-ui, sans-serif; }`;
+            const jsContent = `console.log('Killactivity V2.6 dashboard initialized.');`;
+
+            zip.file("index.html", htmlContent);
+            zip.file("styles.css", cssContent);
+            zip.file("app.js", jsContent);
+
+            zip.generateAsync({ type: "blob" }).then(function(content) {
+                const element = document.createElement("a");
+                element.href = URL.createObjectURL(content);
+                element.download = "Killactivity_V2.6_Source.zip";
+                document.body.appendChild(element);
+                element.click();
+                document.body.removeChild(element);
+
+                appendLog('success', 'Downloaded archive: Killactivity_V2.6_Source.zip');
+                showToast('ZIP exported successfully');
+            }).catch(function(err) {
+                appendLog('danger', 'Export failed: ' + err.message);
+                showToast('ZIP generation failed');
+            });
+        }
+    </script>
+</body>
+</html>
